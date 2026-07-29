@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "akasha/field/v1",
+  "title": "場のスナップショット",
+  "type": "object",
+  "required": ["schema", "moment", "site"],
+  "properties": {
+    "schema": { "const": "field/v1" },
+    "moment": { "type": "string", "format": "date-time" },
+    "site": { "type": "string", "description": "definitions/sites.json の象徴名。生座標は書かない" },
+    "celestial": { "type": ["object", "null"] },
+    "terrestrial": { "type": ["object", "null"] },
+    "calendar": { "type": ["object", "null"] },
+    "errors": { "type": ["array", "null"], "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

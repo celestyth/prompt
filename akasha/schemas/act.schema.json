@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "akasha/act/v1",
+  "title": "儀式・占いの記録",
+  "type": "object",
+  "required": ["schema", "moment", "method"],
+  "properties": {
+    "schema": { "const": "act/v1" },
+    "moment": { "type": "string", "format": "date-time" },
+    "site": { "type": "string" },
+    "method": { "type": "string", "description": "占術・儀式の種類 (tarot, 易, 独自体系名など)" },
+    "question": { "type": ["string", "null"] },
+    "result": { "description": "出目。形式は method 次第 — 構造化はパターンが見えてから" },
+    "self": {
+      "type": ["object", "null"],
+      "description": "観測者自身の状態",
+      "properties": {
+        "condition": { "type": ["string", "null"] },
+        "note": { "type": ["string", "null"] }
+      }
+    },
+    "note": { "type": ["string", "null"], "description": "自由記述。迷ったらここに書く" }
+  },
+  "additionalProperties": true
+}

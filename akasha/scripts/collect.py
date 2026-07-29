@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+"""akasha field collector — 場のスナップショットを1つ生成して field/ に追記する。
+
+取れなかった項目は null + エラーメモで残し、化石化自体は決して止めない。
+"""
+import datetime
+import json
+import os
+import pathlib
+import sys
+
+import requests
+import astronomy
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+UA = {"User-Agent": "akasha-field-collector (github actions)"}
+TIMEOUT = 30
+
+STEMS = "甲乙丙丁戊己庚辛壬癸"
+BRANCHES = "子丑寅卯辰巳午未申酉戌亥"
+SEKKI = [  # 太陽黄経0°=春分から15°刻み
+    "春分", "清明", "穀雨", "立夏", "小満", "芒種", "夏至", "小暑",
+    "大暑", "立秋", "処暑", "白露", "秋分", "寒露", "霜降", "立冬",
+    "小雪", "大雪", "冬至", "小寒", "大寒", "立春", "雨水", "啓蟄",
+]
+SIGNS = [
+    "牡羊", "牡牛", "双子", "蟹", "獅子", "乙女",
+    "天秤", "蠍", "射手", "山羊", "水瓶", "魚",
+]
+DAY_PLANETS = ["月", "火星", "水星", "木星", "金星", "土星", "太陽"]  # weekday() 0=月曜
+PLANETS = [
+    ("sun", astronomy.Body.Sun), ("moon", astronomy.Body.Moon),
+    ("mercury", astronomy.Body.Mercury), ("venus", astronomy.Body.Venus),
+    ("mars", astronomy.Body.Mars), ("jupiter", astronomy.Body.Jupiter),
+    ("saturn", astronomy.Body.Saturn), ("uranus", astronomy.Body.Uranus),
+    ("neptune", astronomy.Body.Neptune), ("pluto", astronomy.Body.Pluto),
+]
+
+
+def load_site():
+    raw = os.environ.get("SITES_JSON")
+    if raw:
+        data = json.loads(raw)
+    else:
+        data = json.loads((ROOT / "definitions" / "sites.json").read_text())
+    name = data["default"]
+    site = next(s for s in data["sites"] if s["name"] == name)
+    return site
+
+
+def fetch_json(url):
+    r = requests.get(url, headers=UA, timeout=TIMEOUT)
+    r.raise_for_status()
+    return r.json()
+
+
+def last_valid_row(rows, indices):
+    """ヘッダ行を除き、必要な列がすべて非nullな最後の行を返す。"""
+    for row in reversed(rows[1:]):
+        if all(row[i] not in (None, "") for i in indices):
+            return row
+    return None
+
+
+def collect_space_weather(errors):
+    out = {"kp": None, "kp_time": None, "solar_wind": None, "imf": None}
+    try:
+        rows = fetch_json("https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json")
+        row = last_valid_row(rows, [1])
+        if row:
+            out["kp_time"], out["kp"] = row[0] + "Z", float(row[1])
+    except Exception as e:
+        errors.append(f"kp: {e}")
+    try:
+        rows = fetch_json("https://services.swpc.noaa.gov/products/solar-wind/plasma-5-minute.json")
+        row = last_valid_row(rows, [1, 2])
+        if row:
+            out["solar_wind"] = {
+                "time": row[0] + "Z",
+                "density_p_cm3": float(row[1]),
+                "speed_km_s": float(row[2]),
+            }
+    except Exception as e:
+        errors.append(f"solar_wind: {e}")
+    try:
+        rows = fetch_json("https://services.swpc.noaa.gov/products/solar-wind/mag-5-minute.json")
+        row = last_valid_row(rows, [3, 6])
+        if row:
+            out["imf"] = {"time": row[0] + "Z", "bz_nT": float(row[3]), "bt_nT": float(row[6])}
+    except Exception as e:
+        errors.append(f"imf: {e}")
+    return out
+
+
+def collect_weather(site, errors):
+    try:
+        data = fetch_json(
+            "https://api.open-meteo.com/v1/forecast"
+            f"?latitude={site['lat']}&longitude={site['lon']}"
+            "&current=temperature_2m,relative_humidity_2m,surface_pressure,pressure_msl,"
+            "cloud_cover,wind_speed_10m,wind_direction_10m,precipitation,weather_code"
+            "&timezone=UTC"
+        )
+        cur = data["current"]
+        return {
+            "time": cur["time"] + "Z",
+            "temperature_c": cur["temperature_2m"],
+            "humidity_pct": cur["relative_humidity_2m"],
+            "pressure_surface_hpa": cur["surface_pressure"],
+            "pressure_msl_hpa": cur["pressure_msl"],
+            "cloud_cover_pct": cur["cloud_cover"],
+            "wind_speed_kmh": cur["wind_speed_10m"],
+            "wind_direction_deg": cur["wind_direction_10m"],
+            "precipitation_mm": cur["precipitation"],
+            "weather_code": cur["weather_code"],
+        }
+    except Exception as e:
+        errors.append(f"weather: {e}")
+        return None
+
+
+def collect_celestial(now, errors):
+    try:
+        t = astronomy.Time.Make(now.year, now.month, now.day, now.hour, now.minute, now.second)
+        longitudes = {}
+        for key, body in PLANETS:
+            if body == astronomy.Body.Sun:
+                lon = astronomy.SunPosition(t).elon
+            elif body == astronomy.Body.Moon:
+                lon = astronomy.EclipticGeoMoon(t).lon
+            else:
+                vec = astronomy.GeoVector(body, t, True)
+                lon = astronomy.Ecliptic(vec).elon
+            longitudes[key] = {"lon_deg": round(lon, 4), "sign": SIGNS[int(lon // 30) % 12]}
+        phase_deg = astronomy.MoonPhase(t)  # 0=新月, 180=満月
+        illum = astronomy.Illumination(astronomy.Body.Moon, t).phase_fraction
+        return {
+            "longitudes": longitudes,
+            "moon_phase_deg": round(phase_deg, 2),
+            "moon_illumination": round(illum, 4),
+            "moon_age_days": round(phase_deg / 360.0 * 29.530589, 2),
+        }
+    except Exception as e:
+        errors.append(f"celestial: {e}")
+        return None
+
+
+def collect_calendar(now, celestial):
+    jst_date = (now + datetime.timedelta(hours=9)).date()
+    # 1949-10-01 は甲子日。日の干支はJSTの日付で数える
+    anchor = datetime.date(1949, 10, 1)
+    idx = (jst_date.toordinal() - anchor.toordinal()) % 60
+    ganzhi = STEMS[idx % 10] + BRANCHES[idx % 12]
+    sekki = None
+    if celestial:
+        sun_lon = celestial["longitudes"]["sun"]["lon_deg"]
+        sekki = SEKKI[int(sun_lon // 15) % 24]
+    return {
+        "date_jst": jst_date.isoformat(),
+        "day_ganzhi": ganzhi,
+        "sekki": sekki,
+        "day_planet": DAY_PLANETS[jst_date.weekday()],
+    }
+
+
+def main():
+    now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+    errors = []
+    site = load_site()
+    celestial = collect_celestial(now, errors)
+    snapshot = {
+        "schema": "field/v1",
+        "moment": now.isoformat(),
+        "site": site["name"],
+        "celestial": celestial,
+        "terrestrial": {
+            "space_weather": collect_space_weather(errors),
+            "weather": collect_weather(site, errors),
+        },
+        "calendar": collect_calendar(now, celestial),
+        "errors": errors or None,
+    }
+    out = ROOT / "field" / f"{now:%Y}" / f"{now:%m}" / f"{now:%d}" / f"{now:%H%M}Z.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2) + "\n")
+    print(f"fossilized: {out.relative_to(ROOT)}")
+    if errors:
+        print("partial (recorded with nulls):", *errors, sep="\n  ", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()
