@@ -2,7 +2,8 @@ name: collect-field
 
 on:
   schedule:
-    - cron: "0 */3 * * *"
+    # 毎時0分はGitHub全体で混雑して遅延しやすいため、空いている23分を使う
+    - cron: "23 */3 * * *"
   workflow_dispatch:
 
 permissions:
