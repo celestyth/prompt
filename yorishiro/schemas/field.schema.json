@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "akasha/field/v1",
+  "$id": "yorishiro/field/v1",
   "title": "場のスナップショット",
   "type": "object",
   "required": ["schema", "moment", "site"],

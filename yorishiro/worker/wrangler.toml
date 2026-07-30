@@ -1,7 +1,7 @@
-name = "akasha-gate"
+name = "yorishiro-gate"
 main = "src/index.js"
 compatibility_date = "2026-07-01"
 
 [[kv_namespaces]]
-binding = "AKASHA_KV"
+binding = "YORISHIRO_KV"
 id = "REPLACE_WITH_KV_NAMESPACE_ID"

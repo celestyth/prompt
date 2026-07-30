@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "akasha/act/v1",
+  "$id": "yorishiro/act/v1",
   "title": "儀式・占いの記録",
   "type": "object",
   "required": ["schema", "moment", "method"],

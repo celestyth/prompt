@@ -78,14 +78,15 @@ def render_latest(s):
         f"- 地磁気 Kp: {fmt(sw.get('kp'))} / 太陽風 {fmt(wind.get('speed_km_s'), ' km/s')}"
         f" / Bz {fmt(imf.get('bz_nT'), ' nT')}"
     )
-    if w:
-        lines.append(
-            f"- 天気: {weather_emoji(w.get('weather_code'))} {fmt(w.get('temperature_c'), '℃')}"
-            f" / {fmt(w.get('pressure_msl_hpa'), ' hPa')} / 湿度 {fmt(w.get('humidity_pct'), '%')}"
-            f" / 雲量 {fmt(w.get('cloud_cover_pct'), '%')}"
-        )
-    else:
-        lines.append("- 天気: —")
+    for name, sw_ in sorted((w or {}).items(), key=lambda kv: kv[0] != s["site"]):
+        if sw_:
+            lines.append(
+                f"- {name}: {weather_emoji(sw_.get('weather_code'))} {fmt(sw_.get('temperature_c'), '℃')}"
+                f" / {fmt(sw_.get('pressure_msl_hpa'), ' hPa')} / 湿度 {fmt(sw_.get('humidity_pct'), '%')}"
+                f" / 雲量 {fmt(sw_.get('cloud_cover_pct'), '%')}"
+            )
+        else:
+            lines.append(f"- {name}: —")
     if s.get("errors"):
         lines.append(f"- ⚠ 欠測 {len(s['errors'])} 項目 (このスナップショットのerrors参照)")
     return lines
@@ -100,7 +101,7 @@ def render_table(snaps):
     for s in reversed(snaps[-MAX_ROWS:]):
         c = s.get("celestial") or {}
         sw = (s.get("terrestrial") or {}).get("space_weather") or {}
-        w = (s.get("terrestrial") or {}).get("weather") or {}
+        w = ((s.get("terrestrial") or {}).get("weather") or {}).get(s["site"]) or {}
         moon = moon_emoji(c["moon_phase_deg"]) if c else "—"
         lines.append(
             f"| {jst(s['moment']):%m-%d %H:%M} | {s['site']} | {moon}"

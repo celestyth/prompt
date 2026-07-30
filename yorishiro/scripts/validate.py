@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""akasha validator — field/ と acts/ の全レコードをスキーマ検証する。
+"""yorishiro validator — field/ と acts/ の全レコードをスキーマ検証する。
 
 壊れたデータが地層に混ざった瞬間にCIで気づくための門番。
 """

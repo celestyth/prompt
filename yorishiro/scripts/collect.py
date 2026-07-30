@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""akasha field collector — 場のスナップショットを1つ生成して field/ に追記する。
+"""yorishiro field collector — 場のスナップショットを1つ生成して field/ に追記する。
 
 取れなかった項目は null + エラーメモで残し、化石化自体は決して止めない。
 """
@@ -13,7 +13,7 @@ import requests
 import astronomy
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-UA = {"User-Agent": "akasha-field-collector (github actions)"}
+UA = {"User-Agent": "yorishiro-field-collector (github actions)"}
 TIMEOUT = 30
 
 STEMS = "甲乙丙丁戊己庚辛壬癸"
@@ -37,15 +37,18 @@ PLANETS = [
 ]
 
 
-def load_site():
+def load_sites():
+    """公開辞書と私的辞書(SITES_JSON)をマージ。名前が重複したらシークレット側が勝つ。"""
+    data = json.loads((ROOT / "definitions" / "sites.json").read_text())
+    sites = {s["name"]: s for s in data["sites"]}
+    default = data["default"]
     raw = os.environ.get("SITES_JSON")
     if raw:
-        data = json.loads(raw)
-    else:
-        data = json.loads((ROOT / "definitions" / "sites.json").read_text())
-    name = data["default"]
-    site = next(s for s in data["sites"] if s["name"] == name)
-    return site
+        private = json.loads(raw)
+        for s in private.get("sites", []):
+            sites[s["name"]] = s
+        default = private.get("default", default)
+    return default, list(sites.values())
 
 
 def fetch_json(url):
@@ -115,7 +118,7 @@ def collect_weather(site, errors):
             "weather_code": cur["weather_code"],
         }
     except Exception as e:
-        errors.append(f"weather: {e}")
+        errors.append(f"weather[{site['name']}]: {e}")
         return None
 
 
@@ -166,16 +169,16 @@ def collect_calendar(now, celestial):
 def main():
     now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
     errors = []
-    site = load_site()
+    default, sites = load_sites()
     celestial = collect_celestial(now, errors)
     snapshot = {
         "schema": "field/v1",
         "moment": now.isoformat(),
-        "site": site["name"],
+        "site": default,
         "celestial": celestial,
         "terrestrial": {
             "space_weather": collect_space_weather(errors),
-            "weather": collect_weather(site, errors),
+            "weather": {s["name"]: collect_weather(s, errors) for s in sites},
         },
         "calendar": collect_calendar(now, celestial),
         "errors": errors or None,

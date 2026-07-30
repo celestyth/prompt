@@ -1,4 +1,4 @@
-// akasha 翻訳所 — Overlandの生座標を受け取り、象徴名に翻訳して最新位置だけ保持する。
+// yorishiro-gate 翻訳所 — Overlandの生座標を受け取り、象徴名に翻訳して最新位置だけ保持する。
 // 生座標はどこにも永続化しない。KVに残るのは象徴名と粗い時刻のみ。
 
 function haversineM(lat1, lon1, lat2, lon2) {
@@ -44,7 +44,7 @@ export default {
           site: translate(lat, lon, sites),
           time: last.properties?.timestamp ?? new Date().toISOString(),
         };
-        await env.AKASHA_KV.put("latest_location", JSON.stringify(record));
+        await env.YORISHIRO_KV.put("latest_location", JSON.stringify(record));
       }
       // Overland は {"result": "ok"} を受け取ると送信済みバッチを端末から消す
       return Response.json({ result: "ok" });
@@ -52,7 +52,7 @@ export default {
 
     // 収集ジョブが現在の象徴を問い合わせる
     if (request.method === "GET" && url.pathname === "/latest") {
-      const raw = await env.AKASHA_KV.get("latest_location");
+      const raw = await env.YORISHIRO_KV.get("latest_location");
       return Response.json(raw ? JSON.parse(raw) : { site: null, time: null });
     }
 

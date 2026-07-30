@@ -20,7 +20,7 @@ jobs:
           else
             echo "CLOUDFLARE_API_TOKEN not set — skipping deploy (v1 mode)"
           fi
-      - name: Deploy akasha-gate
+      - name: Deploy yorishiro-gate
         if: steps.check.outputs.ready == 'true'
         uses: cloudflare/wrangler-action@v3
         with:
