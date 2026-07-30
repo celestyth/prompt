@@ -46,6 +46,27 @@ worker/        # 位置→象徴の翻訳所(Cloudflare Worker、Overland受け�
 
 APIが落ちていても化石化は止めない — 取れなかった項目は `null` +エラーメモで残す。
 
+## 運用構造 (push / deploy)
+
+`main` が地層の本体。3本のワークフローが守る:
+
+| ワークフロー | トリガー | 役割 |
+|---|---|---|
+| `collect-field` | 3時間ごと + 手動 | スナップショット生成 → botが `main` に追記コミット |
+| `validate` | 全push / PR | field・actsの全レコードをスキーマ検証。壊れたデータの混入を即検知 |
+| `deploy-worker` | `worker/**` 変更時 | akasha-gateをCloudflareに自動デプロイ(シークレット未設定なら静かにスキップ) |
+
+push規約:
+- **field/** はbot専用。人間は触らない(過去の書き換え禁止 = 追記オンリー)
+- **acts/ definitions/** は人間が編集。直接コミットでよいが、スキーマを変える変更はPR推奨
+- スキーマ変更は `schemas/` と `scripts/` を同一コミットで — 検証が地層全体に走るので、
+  過去のレコードを壊す変更はCIが止める
+
+## アカシャシリーズ
+
+役割が育ったら分離する予約名: `akasha-gate`(門・翻訳所) / `akasha-codex`(書・体系) /
+`akasha-oracle`(神託・分析) / `akasha-mirror`(鏡・iOSアプリ)。
+
 ## セットアップ
 
 1. このリポジトリを **プライベート** で作成し、この一式をpush

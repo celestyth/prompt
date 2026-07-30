@@ -1,0 +1,29 @@
+name: deploy-worker
+
+on:
+  push:
+    branches: [main]
+    paths: ["worker/**"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # シークレット未設定のうち(v1)は静かにスキップし、v2でWorkerを使い始めたら自動デプロイになる
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check secrets
+        id: check
+        run: |
+          if [ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "CLOUDFLARE_API_TOKEN not set — skipping deploy (v1 mode)"
+          fi
+      - name: Deploy akasha-gate
+        if: steps.check.outputs.ready == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
