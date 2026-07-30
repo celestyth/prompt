@@ -137,21 +137,30 @@ def render_latest(s):
 def render_table(snaps):
     lines = [
         "## 直近の地層 (新しい順)", "",
-        "| 時刻 (JST) | 場 | 月 | 月齢 | 六曜 | Kp | 気温 | 気圧 | 天気 |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| 時刻 (JST) | 月 | 月齢 | 六曜 | Kp | 気温 | 気圧 | 五点の空 |",
+        "|---|---|---|---|---|---|---|---|",
     ]
+    site_order = None
     for s in reversed(snaps[-MAX_ROWS:]):
         c = s.get("celestial") or {}
         cal = s.get("calendar") or {}
         sw = (s.get("terrestrial") or {}).get("space_weather") or {}
-        w = ((s.get("terrestrial") or {}).get("weather") or {}).get(s["site"]) or {}
+        weather = (s.get("terrestrial") or {}).get("weather") or {}
+        w = weather.get(s["site"]) or {}
+        if site_order is None and weather:
+            site_order = list(weather.keys())
+        skies = "".join(
+            weather_emoji((weather.get(name) or {}).get("weather_code")) for name in (site_order or [])
+        ) or "—"
         moon = moon_emoji(c["moon_phase_deg"]) if c else "—"
         lines.append(
-            f"| {jst(s['moment']):%m-%d %H:%M} | {s['site']} | {moon}"
+            f"| {jst(s['moment']):%m-%d %H:%M} | {moon}"
             f" | {fmt(c.get('moon_age_days'))} | {fmt(cal.get('rokuyo'))} | {fmt(sw.get('kp'))}"
             f" | {fmt(w.get('temperature_c'), '℃')} | {fmt(w.get('pressure_msl_hpa'))}"
-            f" | {weather_emoji(w.get('weather_code'))} |"
+            f" | {skies} |"
         )
+    if site_order:
+        lines += ["", f"気温・気圧は錨点。五点の空は左から {('・'.join(site_order))}。"]
     return lines
 
 
