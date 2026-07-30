@@ -57,42 +57,90 @@ def fetch_json(url):
     return r.json()
 
 
-def last_valid_row(rows, indices):
-    """ヘッダ行を除き、必要な列がすべて非nullな最後の行を返す。"""
-    for row in reversed(rows[1:]):
-        if all(row[i] not in (None, "") for i in indices):
+def normalize_rows(data):
+    """NOAAの2形式(ヘッダ行つき配列 / 辞書のリスト)を辞書のリストに揃える。"""
+    if not isinstance(data, list) or not data:
+        return []
+    if isinstance(data[0], dict):
+        return data
+    header = data[0]
+    return [dict(zip(header, r)) for r in data[1:]]
+
+
+def pick(row, *keys):
+    for k in keys:
+        v = row.get(k)
+        if v not in (None, ""):
+            return v
+    return None
+
+
+def last_valid_row(data, *key_groups):
+    """各キー群から1つずつ値が取れる、最後(最新)の行を返す。"""
+    for row in reversed(normalize_rows(data)):
+        if all(pick(row, *ks) is not None for ks in key_groups):
             return row
     return None
 
 
 def collect_space_weather(errors):
     out = {"kp": None, "kp_time": None, "solar_wind": None, "imf": None}
+    t_keys = ("time_tag", "time-tag")
     try:
-        rows = fetch_json("https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json")
-        row = last_valid_row(rows, [1])
+        data = fetch_json("https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json")
+        row = last_valid_row(data, t_keys, ("Kp", "kp_index", "estimated_kp", "kp"))
         if row:
-            out["kp_time"], out["kp"] = row[0] + "Z", float(row[1])
+            out["kp_time"] = str(pick(row, *t_keys))
+            out["kp"] = float(pick(row, "Kp", "kp_index", "estimated_kp", "kp"))
     except Exception as e:
-        errors.append(f"kp: {e}")
-    try:
-        rows = fetch_json("https://services.swpc.noaa.gov/products/solar-wind/plasma-5-minute.json")
-        row = last_valid_row(rows, [1, 2])
-        if row:
-            out["solar_wind"] = {
-                "time": row[0] + "Z",
-                "density_p_cm3": float(row[1]),
-                "speed_km_s": float(row[2]),
-            }
-    except Exception as e:
-        errors.append(f"solar_wind: {e}")
-    try:
-        rows = fetch_json("https://services.swpc.noaa.gov/products/solar-wind/mag-5-minute.json")
-        row = last_valid_row(rows, [3, 6])
-        if row:
-            out["imf"] = {"time": row[0] + "Z", "bz_nT": float(row[3]), "bt_nT": float(row[6])}
-    except Exception as e:
-        errors.append(f"imf: {e}")
+        errors.append(f"kp: {e!r}")
+    density_keys = ("density", "proton_density")
+    speed_keys = ("speed", "proton_speed")
+    bz_keys = ("bz_gsm", "bz")
+    out["solar_wind"] = collect_first(
+        [
+            "https://services.swpc.noaa.gov/products/geospace/propagated-solar-wind-1-hour.json",
+            "https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json",
+            "https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json",
+        ],
+        (t_keys, density_keys, speed_keys),
+        lambda row: {
+            "time": str(pick(row, *t_keys)),
+            "density_p_cm3": float(pick(row, *density_keys)),
+            "speed_km_s": float(pick(row, *speed_keys)),
+        },
+        errors, "solar_wind",
+    )
+    out["imf"] = collect_first(
+        [
+            "https://services.swpc.noaa.gov/products/geospace/propagated-solar-wind-1-hour.json",
+            "https://services.swpc.noaa.gov/json/rtsw/rtsw_mag_1m.json",
+            "https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json",
+        ],
+        (t_keys, bz_keys, ("bt",)),
+        lambda row: {
+            "time": str(pick(row, *t_keys)),
+            "bz_nT": float(pick(row, *bz_keys)),
+            "bt_nT": float(pick(row, "bt")),
+        },
+        errors, "imf",
+    )
     return out
+
+
+def collect_first(urls, key_groups, build, errors, label):
+    """候補URLを順に試し、最初に取れたものを返す。全滅したときだけ欠測メモを残す。"""
+    attempts = []
+    for url in urls:
+        try:
+            row = last_valid_row(fetch_json(url), *key_groups)
+            if row:
+                return build(row)
+            attempts.append(f"{url.rsplit('/', 1)[-1]}: no valid row")
+        except Exception as e:
+            attempts.append(f"{url.rsplit('/', 1)[-1]}: {e!r}")
+    errors.append(f"{label}: " + " | ".join(attempts))
+    return None
 
 
 def collect_weather(site, errors):
