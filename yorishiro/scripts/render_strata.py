@@ -55,10 +55,18 @@ def load_snapshots():
     return snaps
 
 
+PLANET_JA = {
+    "mercury": "水星", "venus": "金星", "mars": "火星", "jupiter": "木星",
+    "saturn": "土星", "uranus": "天王星", "neptune": "海王星", "pluto": "冥王星",
+}
+
+
 def render_latest(s):
     c, cal = s.get("celestial"), s.get("calendar") or {}
-    sw = (s.get("terrestrial") or {}).get("space_weather") or {}
-    w = (s.get("terrestrial") or {}).get("weather")
+    terr = s.get("terrestrial") or {}
+    sw = terr.get("space_weather") or {}
+    w = terr.get("weather")
+    seismic = terr.get("seismic")
     t = jst(s["moment"])
     lines = [f"## 最新の断面 — {t:%Y-%m-%d %H:%M} JST @{s['site']}", ""]
     if c:
@@ -66,18 +74,52 @@ def render_latest(s):
         lines.append(
             f"- 月: {moon_emoji(c['moon_phase_deg'])} 輝面 {c['moon_illumination']*100:.1f}%"
             f" / 月齢 {c['moon_age_days']} / {lon['moon']['sign']}座"
+            f" / 距離 {fmt(c.get('moon_distance_km'), ' km')} / 潮汐 {fmt(c.get('tidal_index'))}"
         )
         lines.append(
             f"- 太陽: {lon['sun']['sign']} {lon['sun']['lon_deg']:.1f}°"
             f" / {cal.get('sekki') or '—'} / {cal.get('day_ganzhi') or '—'}の日"
             f" / {cal.get('day_planet') or '—'}の日"
         )
+        k = cal.get("kyureki")
+        if k:
+            leap = "閏" if k.get("leap") else ""
+            lines.append(
+                f"- 暦: 旧暦{leap}{k['month']}月{k['day']}日 {cal.get('rokuyo') or ''}"
+                f" / {cal.get('kyusei_year') or '—'}年・{cal.get('kyusei_month') or '—'}月"
+            )
+        if c.get("retrograde"):
+            lines.append("- 逆行中: " + "・".join(PLANET_JA.get(p, p) for p in c["retrograde"]))
+        rs = c.get("rise_set_jst") or {}
+        if rs:
+            sun_rs, moon_rs = rs.get("sun") or {}, rs.get("moon") or {}
+            lines.append(
+                f"- 出入り(JST): 日 {fmt(sun_rs.get('rise'))}〜{fmt(sun_rs.get('set'))}"
+                f" / 月 {fmt(moon_rs.get('rise'))}〜{fmt(moon_rs.get('set'))}"
+            )
     wind = sw.get("solar_wind") or {}
     imf = sw.get("imf") or {}
+    xray = sw.get("xray") or {}
+    cycle = sw.get("solar_cycle") or {}
     lines.append(
         f"- 地磁気 Kp: {fmt(sw.get('kp'))} / 太陽風 {fmt(wind.get('speed_km_s'), ' km/s')}"
         f" / Bz {fmt(imf.get('bz_nT'), ' nT')}"
     )
+    lines.append(
+        f"- 太陽活動: X線 {fmt(xray.get('flare_class'))} / 黒点数 {fmt(cycle.get('ssn'))}"
+        f" / F10.7 {fmt(cycle.get('f10_7'))}"
+    )
+    if seismic:
+        mx = seismic.get("max")
+        if mx:
+            lines.append(
+                f"- 大地: 直近24h M4+ {seismic['count_24h_m4']}件"
+                f" (最大 M{fmt(mx.get('mag'))} {mx.get('place') or ''})"
+            )
+        else:
+            lines.append("- 大地: 直近24h M4+ なし (静穏)")
+    else:
+        lines.append("- 大地: —")
     for name, sw_ in sorted((w or {}).items(), key=lambda kv: kv[0] != s["site"]):
         if sw_:
             lines.append(
@@ -95,17 +137,18 @@ def render_latest(s):
 def render_table(snaps):
     lines = [
         "## 直近の地層 (新しい順)", "",
-        "| 時刻 (JST) | 場 | 月 | 月齢 | Kp | 気温 | 気圧 | 天気 |",
-        "|---|---|---|---|---|---|---|---|",
+        "| 時刻 (JST) | 場 | 月 | 月齢 | 六曜 | Kp | 気温 | 気圧 | 天気 |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for s in reversed(snaps[-MAX_ROWS:]):
         c = s.get("celestial") or {}
+        cal = s.get("calendar") or {}
         sw = (s.get("terrestrial") or {}).get("space_weather") or {}
         w = ((s.get("terrestrial") or {}).get("weather") or {}).get(s["site"]) or {}
         moon = moon_emoji(c["moon_phase_deg"]) if c else "—"
         lines.append(
             f"| {jst(s['moment']):%m-%d %H:%M} | {s['site']} | {moon}"
-            f" | {fmt(c.get('moon_age_days'))} | {fmt(sw.get('kp'))}"
+            f" | {fmt(c.get('moon_age_days'))} | {fmt(cal.get('rokuyo'))} | {fmt(sw.get('kp'))}"
             f" | {fmt(w.get('temperature_c'), '℃')} | {fmt(w.get('pressure_msl_hpa'))}"
             f" | {weather_emoji(w.get('weather_code'))} |"
         )
