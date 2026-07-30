@@ -52,7 +52,7 @@ APIが落ちていても化石化は止めない — 取れなかった項目は
 
 | ワークフロー | トリガー | 役割 |
 |---|---|---|
-| `collect-field` | 3時間ごと + 手動 | スナップショット生成 → botが `main` に追記コミット |
+| `collect-field` | 3時間ごと + 手動 | スナップショット生成 + **STRATA.md(地層確認ページ)再生成** → botが `main` に追記コミット |
 | `validate` | 全push / PR | field・actsの全レコードをスキーマ検証。壊れたデータの混入を即検知 |
 | `deploy-worker` | `worker/**` 変更時 | akasha-gateをCloudflareに自動デプロイ(シークレット未設定なら静かにスキップ) |
 
