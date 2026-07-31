@@ -1,0 +1,62 @@
+name: watchdog
+
+# 番犬 — 毎時、最新化石の鮮度を確認する。定時収集(3時間おき)が
+# スキップ・失敗・大幅遅延で3時間40分以上の空白を作ったら、その場で埋める。
+on:
+  schedule:
+    - cron: "47 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect-field   # 定時収集と同じグループ — 同時実行による競合を防ぐ
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check strata freshness
+        id: gap
+        run: |
+          latest=$(find field -name '*.json' 2>/dev/null | sort | tail -1)
+          if [ -z "$latest" ]; then
+            echo "fill=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          hhmm=$(basename "$latest" Z.json)
+          day=$(dirname "$latest" | sed 's|field/||; s|/|-|g')
+          last_epoch=$(date -u -d "$day ${hhmm:0:2}:${hhmm:2:2}" +%s)
+          age=$(( $(date -u +%s) - last_epoch ))
+          echo "latest=$latest age_min=$((age / 60))"
+          if [ "$age" -gt 13200 ]; then
+            echo "fill=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.gap.outputs.fill == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Fill the gap
+        if: steps.gap.outputs.fill == 'true'
+        env:
+          SITES_JSON: ${{ secrets.SITES_JSON }}
+        run: |
+          pip install -r requirements.txt
+          python scripts/collect.py
+          python scripts/render_strata.py
+      - name: Commit fossil
+        if: steps.gap.outputs.fill == 'true'
+        run: |
+          git config user.name "yorishiro-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add field/ STRATA.md
+          if git diff --cached --quiet; then
+            echo "nothing to fossilize"
+          else
+            git commit -m "field: $(date -u +%Y-%m-%dT%H:%M)Z (watchdog fill)"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push
+          fi

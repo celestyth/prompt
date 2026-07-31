@@ -9,6 +9,7 @@ import math
 import os
 import pathlib
 import sys
+import time
 
 import requests
 import astronomy
@@ -56,10 +57,16 @@ def load_sites():
     return default, list(sites.values())
 
 
-def fetch_json(url):
-    r = requests.get(url, headers=UA, timeout=TIMEOUT)
-    r.raise_for_status()
-    return r.json()
+def fetch_json(url, tries=3):
+    for attempt in range(tries):
+        try:
+            r = requests.get(url, headers=UA, timeout=TIMEOUT)
+            r.raise_for_status()
+            return r.json()
+        except Exception:
+            if attempt == tries - 1:
+                raise
+            time.sleep(2 * (attempt + 1))
 
 
 def normalize_rows(data):
