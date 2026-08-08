@@ -27,11 +27,12 @@ iPhone / Android の Safari・Chrome で開いて、共有メニューから「�
 ## 構成
 
 ```
-app/       PWA 本体(ビルド不要の素の HTML/JS)→ GitHub Pages に自動デプロイ
+web/       PWA 本体(ビルド不要の素の HTML/JS)→ GitHub Pages に自動デプロイ
+ios/       ネイティブ iOS 版(次フェーズで追加予定 — 気圧・磁気・バックグラウンド計測対応)
 server/    データ受信サーバーのサンプル(Cloudflare Worker + D1)
 ```
 
-デプロイは `.github/workflows/deploy-pages.yml` が行います。`app/` 配下を変更してプッシュすると自動で反映されます。
+デプロイは `.github/workflows/deploy-pages.yml` が行います。`web/` 配下を変更してプッシュすると自動で反映されます。
 
 ## サーバー送信のデータ形式
 
