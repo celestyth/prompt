@@ -1,0 +1,9 @@
+name = "sensorlog-ingest"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sensorlog"
+# `wrangler d1 create sensorlog` の出力で置き換えてください
+database_id = "REPLACE_WITH_YOUR_DATABASE_ID"

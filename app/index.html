@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SensorLog — スマホセンシング</title>
+<meta name="description" content="スマホのセンサー(加速度・ジャイロ・方位・GPS・マイク)をリアルタイム計測・記録するPWA">
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f9f9f7" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SensorLog">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+<style>
+:root {
+  color-scheme: light dark;
+  --surface-1: #fcfcfb;
+  --page: #f9f9f7;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11,11,11,0.10);
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --good: #0ca30c;
+  --critical: #d03b3b;
+  --accent: #2a78d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-1: #1a1a19;
+    --page: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255,255,255,0.10);
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --accent: #3987e5;
+  }
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--page);
+  color: var(--text-primary);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  -webkit-text-size-adjust: 100%;
+}
+header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px 10px;
+}
+header h1 { font-size: 18px; font-weight: 700; flex: 1; }
+.rec-badge {
+  display: none; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; color: var(--critical);
+}
+.rec-badge.on { display: flex; }
+.rec-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--critical); animation: blink 1.2s infinite; }
+@keyframes blink { 50% { opacity: 0.25; } }
+main { padding: 0 12px 96px; max-width: 640px; margin: 0 auto; }
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.card h2 { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.card h2 .unit { color: var(--muted); font-weight: 400; font-size: 12px; }
+.card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; margin: 6px 0 8px; }
+.legend .item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+.legend .chip { width: 10px; height: 10px; border-radius: 3px; }
+.legend .val { font-variant-numeric: tabular-nums; color: var(--text-primary); min-width: 5.5ch; text-align: right; }
+canvas.chart { width: 100%; height: 120px; display: block; touch-action: pan-y; }
+.stat-row { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 8px; }
+.stat { min-width: 96px; }
+.stat .label { font-size: 11px; color: var(--muted); }
+.stat .value { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat .value small { font-size: 11px; font-weight: 400; color: var(--muted); }
+.toggle {
+  appearance: none; -webkit-appearance: none;
+  width: 46px; height: 28px; border-radius: 14px;
+  background: var(--axis); position: relative; cursor: pointer; flex-shrink: 0;
+  transition: background 0.15s;
+}
+.toggle:checked { background: var(--good); }
+.toggle::after {
+  content: ""; position: absolute; top: 3px; left: 3px;
+  width: 22px; height: 22px; border-radius: 50%; background: #fff;
+  transition: left 0.15s; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.toggle:checked::after { left: 21px; }
+.note { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+.err { font-size: 12px; color: var(--critical); margin-top: 6px; display: none; }
+.err.show { display: block; }
+.footer-bar {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  background: color-mix(in srgb, var(--page) 88%, transparent);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  display: flex; gap: 8px; max-width: 100%;
+}
+button.btn {
+  flex: 1; border: 1px solid var(--border); border-radius: 12px;
+  padding: 12px 8px; font-size: 14px; font-weight: 600;
+  background: var(--surface-1); color: var(--text-primary); cursor: pointer;
+}
+button.btn:active { opacity: 0.7; }
+button.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.btn.danger { background: var(--critical); border-color: var(--critical); color: #fff; }
+button.btn:disabled { opacity: 0.4; }
+dialog {
+  border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface-1); color: var(--text-primary);
+  padding: 18px; width: min(92vw, 420px); margin: auto;
+}
+dialog::backdrop { background: rgba(0,0,0,0.5); }
+dialog h2 { font-size: 16px; margin-bottom: 12px; }
+dialog label { font-size: 13px; color: var(--text-secondary); display: block; margin: 10px 0 4px; }
+dialog input[type=url], dialog input[type=number] {
+  width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--axis);
+  background: var(--page); color: var(--text-primary); font-size: 14px;
+}
+dialog .row { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+dialog .actions { display: flex; gap: 8px; margin-top: 18px; }
+.sendstat { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>SensorLog</h1>
+  <span class="rec-badge" id="recBadge"><span class="rec-dot"></span>REC <span id="recTime">0:00</span></span>
+</header>
+<main>
+  <div class="card">
+    <div class="card-head">
+      <h2>加速度 <span class="unit">m/s²</span></h2>
+      <input type="checkbox" class="toggle" id="tglMotion" aria-label="加速度・ジャイロを有効化">
+    </div>
+    <div class="legend" id="legAccel"></div>
+    <canvas class="chart" id="chAccel" aria-label="加速度のリアルタイムチャート"></canvas>
+    <p class="err" id="errMotion"></p>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>角速度(ジャイロ) <span class="unit">deg/s</span></h2></div>
+    <div class="legend" id="legGyro"></div>
+    <canvas class="chart" id="chGyro" aria-label="角速度のリアルタイムチャート"></canvas>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>方位・姿勢</h2>
+      <input type="checkbox" class="toggle" id="tglOrient" aria-label="方位センサーを有効化">
+    </div>
+    <div class="stat-row">
+      <div class="stat"><div class="label">コンパス方位</div><div class="value" id="vHeading">–<small> °</small></div></div>
+      <div class="stat"><div class="label">前後傾き β</div><div class="value" id="vBeta">–<small> °</small></div></div>
+      <div class="stat"><div class="label">左右傾き γ</div><div class="value" id="vGamma">–<small> °</small></div></div>
+    </div>
+    <p class="err" id="errOrient"></p>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>GPS(位置情報)</h2>
+      <input type="checkbox" class="toggle" id="tglGps" aria-label="GPSを有効化">
+    </div>
+    <div class="stat-row">
+      <div class="stat"><div class="label">緯度</div><div class="value" id="vLat">–</div></div>
+      <div class="stat"><div class="label">経度</div><div class="value" id="vLon">–</div></div>
+      <div class="stat"><div class="label">速度</div><div class="value" id="vSpeed">–<small> km/h</small></div></div>
+      <div class="stat"><div class="label">高度</div><div class="value" id="vAlt">–<small> m</small></div></div>
+      <div class="stat"><div class="label">精度</div><div class="value" id="vAcc">–<small> m</small></div></div>
+    </div>
+    <p class="err" id="errGps"></p>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>マイク音量 <span class="unit">dBFS</span></h2>
+      <input type="checkbox" class="toggle" id="tglMic" aria-label="マイクを有効化">
+    </div>
+    <div class="legend" id="legMic"></div>
+    <canvas class="chart" id="chMic" aria-label="マイク音量のリアルタイムチャート"></canvas>
+    <p class="err" id="errMic"></p>
+  </div>
+
+  <div class="card">
+    <p class="note">
+      センサーを有効にすると端末が許可を求めます(iOSでは HTTPS + タップ操作が必須)。
+      気圧・磁気の生値はブラウザからは取得できないため、ネイティブ版で対応予定です。
+      記録データは端末内に保持され、エクスポートまたは送信設定をしない限り外部に出ません。
+    </p>
+    <p class="sendstat" id="sendStat"></p>
+  </div>
+</main>
+
+<div class="footer-bar">
+  <button class="btn primary" id="btnRec">記録開始</button>
+  <button class="btn" id="btnExport" disabled>CSV書き出し</button>
+  <button class="btn" id="btnSettings" aria-label="設定">⚙︎</button>
+</div>
+
+<dialog id="dlgSettings">
+  <h2>設定</h2>
+  <label for="inpEndpoint">送信先エンドポイント URL(任意)</label>
+  <input type="url" id="inpEndpoint" placeholder="https://example.com/api/readings" inputmode="url">
+  <div class="row">
+    <span style="font-size:14px">計測中にサーバーへ送信する</span>
+    <input type="checkbox" class="toggle" id="tglSend">
+  </div>
+  <p class="note">2秒ごとにJSONバッチをPOSTします。リポジトリの server/ に受信側(Cloudflare Worker)のサンプルがあります。</p>
+  <div class="actions">
+    <button class="btn" id="btnCloseSettings">閉じる</button>
+    <button class="btn primary" id="btnSaveSettings">保存</button>
+  </div>
+</dialog>
+
+<script src="./app.js"></script>
+</body>
+</html>
