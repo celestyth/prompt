@@ -1,10 +1,10 @@
 /**
- * SensorLog 受信サーバーのサンプル (Cloudflare Worker + D1)
+ * StellaLog 受信サーバーのサンプル (Cloudflare Worker + D1)
  *
  * デプロイ手順:
  *   1. npm i -g wrangler && wrangler login
- *   2. wrangler d1 create sensorlog   → 出力された database_id を wrangler.toml に記入
- *   3. wrangler d1 execute sensorlog --remote --file=./schema.sql
+ *   2. wrangler d1 create stellalog   → 出力された database_id を wrangler.toml に記入
+ *   3. wrangler d1 execute stellalog --remote --file=./schema.sql
  *   4. wrangler deploy
  *   5. 発行された URL + /api/readings をアプリの設定画面に入力
  */
@@ -67,7 +67,7 @@ export default {
       return json({ results });
     }
 
-    return json({ service: "sensorlog-ingest", endpoints: ["POST /api/readings", "GET /api/readings"] });
+    return json({ service: "stellalog-ingest", endpoints: ["POST /api/readings", "GET /api/readings"] });
   },
 };
 

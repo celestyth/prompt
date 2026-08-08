@@ -1,6 +1,6 @@
 {
-  "name": "SensorLog — スマホセンシング",
-  "short_name": "SensorLog",
+  "name": "StellaLog — スマホセンシング",
+  "short_name": "StellaLog",
   "description": "スマホのセンサー(加速度・ジャイロ・方位・GPS・マイク)をリアルタイム計測・記録するPWA",
   "lang": "ja",
   "start_url": "./",

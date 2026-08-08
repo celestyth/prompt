@@ -197,11 +197,11 @@ async function exportCSV() {
     if (!rows.length) continue;
     const csv = CSV_HEADERS[sensor] + "\n" +
       rows.map((r) => r.map((v) => (v == null || !isFinite(v) ? "" : round6(v))).join(",")).join("\n");
-    files.push(new File([csv], `sensorlog_${stamp}_${sensor}.csv`, { type: "text/csv" }));
+    files.push(new File([csv], `stellalog_${stamp}_${sensor}.csv`, { type: "text/csv" }));
   }
   if (!files.length) return;
   if (navigator.canShare && navigator.canShare({ files })) {
-    try { await navigator.share({ files, title: "SensorLog CSV" }); return; }
+    try { await navigator.share({ files, title: "StellaLog CSV" }); return; }
     catch (e) { if (e.name === "AbortError") return; /* fall through to download */ }
   }
   for (const f of files) {

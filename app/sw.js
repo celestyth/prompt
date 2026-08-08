@@ -1,4 +1,4 @@
-const CACHE = "sensorlog-v1";
+const CACHE = "stellalog-v1";
 const SHELL = [
   "./",
   "./index.html",

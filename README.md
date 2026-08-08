@@ -1,8 +1,10 @@
-# SensorLog — スマホセンシングアプリ
+# StellaLog — スマホセンシングアプリ
 
 スマホのセンサーをリアルタイム計測・記録する PWA(+ 将来のネイティブ iOS 版)。
 
-**アプリ URL: https://celestyth.github.io/prompt/**
+> 開発・デプロイは専用リポジトリ https://github.com/celestyth/stellalog に移行しました。
+
+**アプリ URL: https://celestyth.github.io/stellalog/**
 
 iPhone / Android の Safari・Chrome で開いて、共有メニューから「ホーム画面に追加」するとアプリとして使えます。
 
